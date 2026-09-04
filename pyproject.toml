@@ -49,6 +49,7 @@ dev = [
 
 [project.scripts]
 aliens_eye = "aliens_eye.cli:main"
+aliens_eye_web = "aliens_eye.webapp:main"
 
 [project.urls]
 Homepage = "https://github.com/arxhr007/Aliens_eye"

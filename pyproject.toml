@@ -30,6 +30,7 @@ dependencies = [
     "rich>=13.7",
     "aiohttp-socks>=0.8,<1.0",
     "platformdirs>=4.0",
+    "flask>=3.0",
 ]
 
 [project.optional-dependencies]
@@ -49,6 +50,7 @@ dev = [
 
 [project.scripts]
 aliens_eye = "aliens_eye.cli:main"
+aliens_eye_web = "aliens_eye.webapp:main"
 
 [project.urls]
 Homepage = "https://github.com/arxhr007/Aliens_eye"

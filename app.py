@@ -9,6 +9,11 @@ import tempfile
 import time
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parent
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
 from flask import Flask, jsonify, request
 
 from aliens_eye.webapp import PAGE, USERNAME_RE, _flatten_report
@@ -55,8 +60,10 @@ def scan():
             "--output",
             temp_dir,
         ]
+        env = dict(__import__("os").environ)
+        env["PYTHONPATH"] = str(SRC) + (":" + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=55)
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=55, env=env)
         except subprocess.TimeoutExpired:
             return jsonify({"error": "Scan timed out in the hosted environment."}), 504
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -20,6 +21,33 @@ from aliens_eye.webapp import PAGE, USERNAME_RE, _flatten_report
 
 app = Flask(__name__)
 
+# Hosted scans must finish inside Vercel's serverless execution window. These
+# presets intentionally target useful, high-signal public platforms rather than
+# the entire 840+ site catalog. Full catalog scans remain available locally via
+# the CLI / aliens_eye_web command.
+HOSTED_SITE_PRESETS = {
+    "quick": [
+        "github", "gitlab", "reddit", "telegram", "vimeo", "imgur",
+        "unsplash", "producthunt", "sourceforge", "codewars", "codechef",
+        "fandom", "instructables", "speedrun", "researchgate",
+    ],
+    "full": [
+        "github", "gitlab", "reddit", "telegram", "vimeo", "imgur",
+        "unsplash", "producthunt", "sourceforge", "codewars", "codechef",
+        "fandom", "instructables", "speedrun", "researchgate", "myspace",
+        "giphy", "mastodon", "medium", "dev.to", "behance", "dribbble",
+        "pinterest", "twitch", "soundcloud", "spotify",
+    ],
+    "aggressive": [
+        "github", "gitlab", "reddit", "telegram", "vimeo", "imgur",
+        "unsplash", "producthunt", "sourceforge", "codewars", "codechef",
+        "fandom", "instructables", "speedrun", "researchgate", "myspace",
+        "giphy", "mastodon", "medium", "dev.to", "behance", "dribbble",
+        "pinterest", "twitch", "soundcloud", "spotify", "youtube", "steam",
+        "keybase", "about.me", "gravatar", "replit", "hackernews",
+    ],
+}
+
 
 @app.get("/")
 def index():
@@ -28,7 +56,7 @@ def index():
 
 @app.get("/health")
 def health():
-    return jsonify({"ok": True, "service": "aliens-eye-web"})
+    return jsonify({"ok": True, "service": "aliens-eye-web", "mode": "hosted-fast-scan"})
 
 
 @app.post("/api/scan")
@@ -42,9 +70,10 @@ def scan():
             "error": "Username must be 1-64 characters using letters, numbers, _, . or -."
         }), 400
 
-    if profile not in {"quick", "full", "aggressive"}:
+    if profile not in HOSTED_SITE_PRESETS:
         profile = "quick"
 
+    sites = ",".join(HOSTED_SITE_PRESETS[profile])
     started = time.monotonic()
     with tempfile.TemporaryDirectory(prefix="aliens-eye-web-") as temp_dir:
         cmd = [
@@ -54,18 +83,31 @@ def scan():
             username,
             "--plain",
             "--profile",
-            profile,
+            "quick",
+            "--site",
+            sites,
+            "--timeout",
+            "3.5",
+            "--retries",
+            "0",
+            "--concurrent",
+            "20",
+            "--rate-limit",
+            "0",
             "--format",
             "json",
             "--output",
             temp_dir,
         ]
-        env = dict(__import__("os").environ)
+        env = dict(os.environ)
         env["PYTHONPATH"] = str(SRC) + (":" + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=55, env=env)
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=45, env=env)
         except subprocess.TimeoutExpired:
-            return jsonify({"error": "Scan timed out in the hosted environment."}), 504
+            return jsonify({
+                "error": "Hosted scan exceeded the serverless limit. Try Quick scan or run the full scanner locally.",
+                "hosted_mode": True,
+            }), 504
 
         if proc.returncode != 0:
             detail = (proc.stderr or proc.stdout or "").strip()
@@ -96,6 +138,8 @@ def scan():
     return jsonify({
         "username": username,
         "profile": profile,
+        "hosted_mode": True,
+        "sites_requested": len(HOSTED_SITE_PRESETS[profile]),
         "elapsed_seconds": round(time.monotonic() - started, 2),
         "results": safe_rows,
     })
